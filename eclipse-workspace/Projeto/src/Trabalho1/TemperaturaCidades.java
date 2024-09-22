@@ -1,23 +1,10 @@
 package Trabalho1;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Stream;
-
-//testando se sobe no git
 
 public class TemperaturaCidades {
 
@@ -27,14 +14,12 @@ public class TemperaturaCidades {
     private static final int ANOS_INICIO = 1995;
     private static final int ANOS_FIM = 2020;
 
-    // Mapa global para armazenar os resultados finais (Cidade -> Ano -> Mês -> Temperaturas)
     private static Map<String, Map<Integer, Map<Integer, double[]>>> resultadosGlobais = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
         for (int experimento = 1; experimento <= 20; experimento++) {
             executarExperimento(experimento);
         }
-
         salvarResultados();
     }
 
@@ -42,7 +27,7 @@ public class TemperaturaCidades {
         long[] temposRodadas = new long[NUMERO_REPETICOES];
 
         for (int rodada = 0; rodada < NUMERO_REPETICOES; rodada++) {
-            long tempoInicio = System.currentTimeMillis(); // Tempo inicial
+            long tempoInicio = System.currentTimeMillis();
             resultadosGlobais.clear();
 
             int numThreads = definirNumeroThreads(experimento);
@@ -55,10 +40,10 @@ public class TemperaturaCidades {
                 executor.execute(new ProcessadorCidades(experimento, cidadeInicial, cidadeFinal));
             }
 
-            awaitTerminationAfterShutdown(executor); // Aguarda a conclusão das threads
+            awaitTerminationAfterShutdown(executor);
 
-            long tempoFim = System.currentTimeMillis(); // Tempo final
-            temposRodadas[rodada] = tempoFim - tempoInicio; // Cálculo do tempo de execução
+            long tempoFim = System.currentTimeMillis();
+            temposRodadas[rodada] = tempoFim - tempoInicio;
             System.out.println("Experimento " + experimento + " - Rodada " + (rodada + 1) + ": "
                     + (tempoFim - tempoInicio) + " ms");
         }
@@ -66,37 +51,30 @@ public class TemperaturaCidades {
         calcularEMostraTempoMedio(experimento, temposRodadas);
     }
 
-
- // Método para definir o número de threads
     private static int definirNumeroThreads(int experimento) {
         if (experimento == 1) {
-            return 1; // Primeira versão sem threads
+            return 1;
         } else if (experimento <= 10) {
-            return (int) Math.pow(2, experimento - 1); // Primeiras 10 versões variando o número de threads por cidade
+            return (int) Math.pow(2, experimento - 1);
         } else {
-            return ANOS_FIM - ANOS_INICIO + 1; // Segundas 10 versões, threads para cada ano processado
+            return ANOS_FIM - ANOS_INICIO + 1;
         }
     }
 
-    // Método para aguardar o término das threads
     private static void awaitTerminationAfterShutdown(ExecutorService threadPool) {
         threadPool.shutdown();
         try {
             if (!threadPool.awaitTermination(60, TimeUnit.SECONDS)) {
-                System.err.println("Timeout while waiting for thread pool termination!");
+                System.err.println("Timeout ao aguardar o término das threads!");
             }
         } catch (InterruptedException ex) {
-            System.err.println("Interrupted while waiting for thread pool termination!");
+            System.err.println("Interrompido ao aguardar o término das threads!");
             Thread.currentThread().interrupt();
         }
     }
 
-    // Método para calcular e mostrar o tempo médio
     private static void calcularEMostraTempoMedio(int experimento, long[] temposRodadas) {
-        long somaTempos = 0;
-        for (long tempo : temposRodadas) {
-            somaTempos += tempo;
-        }
+        long somaTempos = Arrays.stream(temposRodadas).sum();
         long tempoMedio = somaTempos / NUMERO_REPETICOES;
 
         try (FileWriter writer = new FileWriter("versao_" + experimento + ".txt")) {
@@ -110,9 +88,9 @@ public class TemperaturaCidades {
     }
 
     static class ProcessadorCidades implements Runnable {
-        private int experimento;
-        private int cidadeInicial;
-        private int cidadeFinal;
+        private final int experimento;
+        private final int cidadeInicial;
+        private final int cidadeFinal;
 
         public ProcessadorCidades(int experimento, int cidadeInicial, int cidadeFinal) {
             this.experimento = experimento;
@@ -147,7 +125,7 @@ public class TemperaturaCidades {
             String nomeCidade = nomeArquivo.replace(".csv", "").replace("__", " - ");
 
             try (BufferedReader br = new BufferedReader(new FileReader(caminhoCompleto))) {
-                br.readLine(); // Pula o cabeçalho
+                br.readLine(); // Ignora a primeira linha (cabeçalho)
 
                 Map<Integer, DadosTemperaturaMes> dadosPorMes = new ConcurrentHashMap<>();
                 String linha;
@@ -157,68 +135,37 @@ public class TemperaturaCidades {
                     int ano = Integer.parseInt(campos[4]);
                     double temperatura = Double.parseDouble(campos[5]);
 
-                    dadosPorMes.computeIfAbsent(mes, k -> new DadosTemperaturaMes())
-                            .adicionarTemperatura(ano, temperatura);
+                    dadosPorMes.computeIfAbsent(mes, k -> new DadosTemperaturaMes()).adicionarTemperatura(ano, temperatura);
                 }
 
-                // Calcula as temperaturas para cada mês de cada ano
-                for (int ano = ANOS_INICIO; ano <= ANOS_FIM; ano++) {
-                    Map<Integer, double[]> resultadosPorMes = new HashMap<>();
-                    for (Map.Entry<Integer, DadosTemperaturaMes> entry : dadosPorMes.entrySet()) {
-                        int mes = entry.getKey();
-                        DadosTemperaturaMes dadosMes = entry.getValue();
-
-                        double temperaturaMedia = dadosMes.getTemperaturaMedia(ano);
-                        double temperaturaMaxima = dadosMes.getTemperaturaMaxima(ano);
-                        double temperaturaMinima = dadosMes.getTemperaturaMinima(ano);
-
-                        resultadosPorMes.put(mes,
-                                new double[] { temperaturaMedia, temperaturaMaxima, temperaturaMinima });
-                    }
-
-                    // Armazena os resultados no mapa global
-                    resultadosGlobais.computeIfAbsent(nomeCidade, k -> new ConcurrentHashMap<>()).put(ano,
-                            resultadosPorMes);
-                }
-
-                if (experimento > 10) {
-                    ExecutorService executorAnos = Executors.newFixedThreadPool(ANOS_FIM - ANOS_INICIO + 1);
-                    for (int ano = ANOS_INICIO; ano <= ANOS_FIM; ano++) {
-                        executorAnos.execute(new ProcessadorAno(nomeCidade, dadosPorMes, ano));
-                    }
-                    TemperaturaCidades.awaitTerminationAfterShutdown(executorAnos);
-                } else {
-                    // Para experimentos 1 a 10, processa todos os anos em uma única thread
-                    for (int ano = ANOS_INICIO; ano <= ANOS_FIM; ano++) {
-                        new ProcessadorAno(nomeCidade, dadosPorMes, ano).run();
-                    }
-                }
+                salvarResultadosPorAno(nomeCidade, dadosPorMes);
 
             } catch (IOException e) {
                 System.err.println("Erro ao ler arquivo: " + e.getMessage());
             }
         }
-    }
 
-    static class ProcessadorAno implements Runnable {
-        private String nomeCidade;
-        private Map<Integer, DadosTemperaturaMes> dadosPorMes;
-        private int ano;
+        private void salvarResultadosPorAno(String nomeCidade, Map<Integer, DadosTemperaturaMes> dadosPorMes) {
+            for (int ano = ANOS_INICIO; ano <= ANOS_FIM; ano++) {
+                Map<Integer, double[]> resultadosPorMes = new HashMap<>();
+                for (Map.Entry<Integer, DadosTemperaturaMes> entry : dadosPorMes.entrySet()) {
+                    int mes = entry.getKey();
+                    DadosTemperaturaMes dadosMes = entry.getValue();
 
-        public ProcessadorAno(String nomeCidade, Map<Integer, DadosTemperaturaMes> dadosPorMes, int ano) {
-            this.nomeCidade = nomeCidade;
-            this.dadosPorMes = dadosPorMes;
-            this.ano = ano;
-        }
+                    double temperaturaMedia = dadosMes.getTemperaturaMedia(ano);
+                    double temperaturaMaxima = dadosMes.getTemperaturaMaxima(ano);
+                    double temperaturaMinima = dadosMes.getTemperaturaMinima(ano);
 
-        @Override
-        public void run() {
-            // Este método não é mais necessário, pois o cálculo é feito na classe ProcessadorCidades
+                    resultadosPorMes.put(mes, new double[] { temperaturaMedia, temperaturaMaxima, temperaturaMinima });
+                }
+
+                resultadosGlobais.computeIfAbsent(nomeCidade, k -> new ConcurrentHashMap<>()).put(ano, resultadosPorMes);
+            }
         }
     }
 
     static class DadosTemperaturaMes {
-        private Map<Integer, List<Double>> temperaturasPorAno = new HashMap<>();
+        private final Map<Integer, List<Double>> temperaturasPorAno = new HashMap<>();
 
         public void adicionarTemperatura(int ano, double temperatura) {
             temperaturasPorAno.computeIfAbsent(ano, k -> new ArrayList<>()).add(temperatura);
@@ -226,28 +173,15 @@ public class TemperaturaCidades {
 
         public double getTemperaturaMedia(int ano) {
             List<Double> temperaturas = temperaturasPorAno.getOrDefault(ano, new ArrayList<>());
-            if (temperaturas.isEmpty()) {
-                return Double.NaN;
-            }
-            double soma = 0;
-            for (Double temp : temperaturas) {
-                soma += temp;
-            }
-            return soma / temperaturas.size();
+            return temperaturas.isEmpty() ? Double.NaN : temperaturas.stream().mapToDouble(Double::doubleValue).average().orElse(Double.NaN);
         }
 
         public double getTemperaturaMaxima(int ano) {
-            return temperaturasPorAno.getOrDefault(ano, new ArrayList<>()).stream()
-                    .mapToDouble(Double::doubleValue)
-                    .max()
-                    .orElse(Double.NaN);
+            return temperaturasPorAno.getOrDefault(ano, new ArrayList<>()).stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
         }
 
         public double getTemperaturaMinima(int ano) {
-            return temperaturasPorAno.getOrDefault(ano, new ArrayList<>()).stream()
-                    .mapToDouble(Double::doubleValue)
-                    .min()
-                    .orElse(Double.NaN);
+            return temperaturasPorAno.getOrDefault(ano, new ArrayList<>()).stream().mapToDouble(Double::doubleValue).min().orElse(Double.NaN);
         }
     }
 
@@ -258,29 +192,16 @@ public class TemperaturaCidades {
 
             System.out.println("Cidade: " + nomeCidade);
             for (int ano = ANOS_INICIO; ano <= ANOS_FIM; ano++) {
-                System.out.println("Ano: " + ano);
-
-                Map<Integer, double[]> meses = anos.get(ano);
-
-                if (meses != null) {
+                if (anos.containsKey(ano)) {
+                    Map<Integer, double[]> meses = anos.get(ano);
                     for (Map.Entry<Integer, double[]> mesEntry : meses.entrySet()) {
                         int mes = mesEntry.getKey();
                         double[] temperaturas = mesEntry.getValue();
-
-                        // Tratamento de NaN e formatação
-                        String media = Double.isNaN(temperaturas[0]) ? "N/D" : String.format("%.2f", temperaturas[0]).replace('.', ',');
-                        String maxima = Double.isNaN(temperaturas[1]) ? "N/D" : String.format("%.2f", temperaturas[1]).replace('.', ',');
-                        String minima = Double.isNaN(temperaturas[2]) ? "N/D" : String.format("%.2f", temperaturas[2]).replace('.', ',');
-
-                        // Saída formatada
-                        System.out.printf("  Mês: %d - Média: %s, Máxima: %s, Mínima: %s\n", mes, media, maxima, minima);
+                        System.out.printf("Ano: %d, Mês: %d, Média: %.2f, Máxima: %.2f, Mínima: %.2f%n", 
+                                ano, mes, temperaturas[0], temperaturas[1], temperaturas[2]);
                     }
-                } else {
-                    System.out.println("  Sem dados para este ano.");
                 }
-                System.out.println(); // Adiciona uma linha em branco após cada ano
             }
         }
     }
-
 }
