@@ -1,6 +1,6 @@
 # Projeto de Processamento de Dados de Temperaturas
 
-## Descrição
+## Objetivo
 Este projeto processa dados de temperaturas diárias de cidades, utilizando threads para otimizar o desempenho da leitura e cálculo das temperaturas média, máxima e mínima por mês.
 
 ## Tecnologias Utilizadas
